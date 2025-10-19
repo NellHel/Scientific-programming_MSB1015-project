@@ -107,7 +107,6 @@ tf_shares_max$Color <- match(tf_shares_max$Team, unique(tf_shares_max$Team))
 tf_shares$strength_square <- tf_shares$Strength * tf_shares$Strength
 HHI <- rowsum(tf_shares$strength_square, group = tf_shares$Year, na.rm = TRUE)
 colnames(HHI) <- "HHI"
-plot(rownames(HHI), HHI, type = "h", xlab = "Year", ylab = "HHI index")
 ```
 
 # Race and team variables

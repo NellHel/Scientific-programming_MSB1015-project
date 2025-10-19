@@ -47,7 +47,7 @@ ggplot(tf_shares_max, aes(x = Year, y = Strength, color = Team)) +
 ## HH index
 
 ```{r HHI}
-plot(rownames(HHI), HHI, type = "h", xlab = "Year", ylab = "HHI index")
+plot(rownames(HHI), HHI, type = "h", xlab = "Year", ylab = "HHI index", main = "HHI index over the years")
 ```
 
 ## Race and team variables
@@ -55,27 +55,27 @@ plot(rownames(HHI), HHI, type = "h", xlab = "Year", ylab = "HHI index")
 Average kilometer per year
 
 ```{r km}
-plot(km_avg$Year, km_avg$KM_average, type = "h", xlab = "Year", ylab = "Kilometer", title = "Average length of stage over the years")
-plot(km_avg$Year, km_avg$n, type = "h",  xlab = "Year", ylab= "Number of stages", title = "Average number of stages over the years")
+plot(km_avg$Year, km_avg$KM_average, type = "h", xlab = "Year", ylab = "Kilometer", main = "Average length of stage over the years")
+plot(km_avg$Year, km_avg$n, type = "h",  xlab = "Year", ylab= "Number of stages", main = "Average number of stages over the years")
 ```
 
 Number of teams per year
 
 ```{r teams_no}
-plot(teams_number$Year, teams_number$teamnumber, type = "h", xlab = "Year", ylab = "Number of teams", title = "Number of teams over the years")
+plot(teams_number$Year, teams_number$teamnumber, type = "h", xlab = "Year", ylab = "Number of teams", main = "Number of teams over the years")
 ```
 
 Doping cases per year
 
 ```{r doping}
-plot(doping_no$Year, doping_no$Doping_Cases, type = "h", xlab = "Year", ylab = "Number of doping cases", title = "Doping cases over the years")
+plot(doping_no$Year, doping_no$Doping_Cases, type = "h", xlab = "Year", ylab = "Number of doping cases", main = "Doping cases over the years")
 
 ```
 
 Average budget from 2002 - 2024 adjusted per inflation
 
 ```{r budget}
-plot(budget$Year, budget$`WorldTour average budget per team`, type = "l", xlab = "Year", ylab = "Inflation adjusted team budget (Euro)")
+plot(budget$Year, budget$`WorldTour average budget per team`, type = "l", xlab = "Year", ylab = "Inflation adjusted team budget (Euro)", main = "Average team budgets")
 ```
 
 ## Correlation
@@ -144,7 +144,6 @@ plot(pcoa_res$vectors[,3], pcoa_res$vectors[,4],
      ylab = paste0("PCoA4 (", round(pcoa_res$values$Relative_eig[4]*100, 1), "%)"),
      main = "PCoA based on Random Forest dissimilarities",
      pch = 19)
-plot(envfit_res, p.max = 0.05) # arrows show variables significantly aligned with axes
 ```
 
 Prepare for ggplots
@@ -177,29 +176,27 @@ ggplot(PCoA1_2, aes(PCoA1, PCoA2, color = Year, size = Win_Share)) +
 ggPlot colored by win share and gc share
 
 ```{r plot_win_gc_share}
-ggplot(PCoA1_2, aes(PCoA1, PCoA2, color = GC_Share, size = Win_Share)) +
+ggplot(PCoA1_2, aes(PCoA1, PCoA2, color = Win_Share, size = GC_Share)) +
   geom_point() +
   theme_minimal() +
-  labs(title = "PCoA",
+  labs(title = "PCoA colored by its features (win and gc share)",
        x = paste0("PCoA1 (", round(pcoa_res$values$Relative_eig[1]*100, 1), "%)"),
        y = paste0("PCoA2 (", round(pcoa_res$values$Relative_eig[2]*100, 1), "%)"),
-       color = "GC Share",
-       size = "Win Share"
-       ) #+
-  #scale_color_gradient(low = "green", high = "blue")
+       color = "Win Share",
+       size = "GC Share"
+       ) +
+  scale_color_gradient(low = "green", high = "blue")
 ```
 
 ggPlot colored by budget
 
 ```{r plot_budget}
-ggplot(PCoA1_2, aes(PCoA1, PCoA2, color = Budget, size = Win_Share)) +
+ggplot(PCoA1_2, aes(PCoA1, PCoA2, color = Budget)) +
   geom_point() +
   theme_minimal() +
   labs(title = "PCoA colored by team budget 24-25",
        x = paste0("PCoA1 (", round(pcoa_res$values$Relative_eig[1]*100, 1), "%)"),
        y = paste0("PCoA2 (", round(pcoa_res$values$Relative_eig[2]*100, 1), "%)"),
-       color = "Budget (Mill. EURO)",
-       size = "Win Share"
-       ) #+
-  #scale_color_gradient(low = "green", high = "blue")
+       color = "Budget (Mill. EURO)"
+       ) 
 ```

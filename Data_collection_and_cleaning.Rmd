@@ -5,6 +5,11 @@ date: "2025-10-19"
 ---
 
 ```{r setup}
+# install.packages("rstudioapi") # run this if it's your first time using it to install
+if(!"rstudioapi" %in% installed.packages()){
+  install.packages("rstudioapi")}
+library(rstudioapi) # load it
+
 # the following line is for getting the path of your current open file
 current_path <- getActiveDocumentContext()$path 
 # The next line set the working directory to the relevant one:
@@ -27,6 +32,7 @@ library(dplyr)
 library(tidyr)
 library(questionr)
 library(readxl)
+library(utils)
 ```
 
 # Data collection
@@ -38,7 +44,6 @@ gc <- read.csv("TDF_Riders_History.csv")
 # Fill missing values with dataset from kaggle
 kaggle <- read.csv("stage_data.csv")
 # Only keep neccessary kaggle data
-kaggle <- read.csv("stage_data.csv")
 kaggle_clean <- kaggle %>%
   group_by(year, stage_results_id) %>%
   slice_head(n=1)
