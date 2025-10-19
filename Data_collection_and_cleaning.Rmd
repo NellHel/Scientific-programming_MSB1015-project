@@ -1,0 +1,132 @@
+---
+title: "Data collection and cleaning"
+output: html_document
+date: "2025-10-19"
+---
+
+```{r setup}
+# install.packages("rstudioapi") # run this if it's your first time using it to install
+if(!"rstudioapi" %in% installed.packages()){
+  install.packages("rstudioapi")}
+library(rstudioapi) # load it
+
+# the following line is for getting the path of your current open file
+current_path <- getActiveDocumentContext()$path 
+# The next line set the working directory to the relevant one:
+setwd(dirname(current_path ))
+
+# Install libraries if neccessary
+if(!"dplyr" %in% installed.packages()){
+  install.packages("dplyr")}
+
+if(!"tidyr" %in% installed.packages()){
+  install.packages("tidyr")}
+
+if(!"questionr" %in% installed.packages()){
+  install.packages("questionr")}
+
+if(!"readxl" %in% installed.packages()){
+  install.packages("readxl")}
+
+library(dplyr)
+library(tidyr)
+library(questionr)
+library(readxl)
+library(utils)
+```
+
+# Data collection
+
+```{r collection}
+tf <- read.csv("TDF_Stages_History.csv")
+gc <- read.csv("TDF_Riders_History.csv")
+
+# Fill missing values with dataset from kaggle
+kaggle <- read.csv("stage_data.csv")
+# Only keep neccessary kaggle data
+kaggle_clean <- kaggle %>%
+  group_by(year, stage_results_id) %>%
+  slice_head(n=1)
+rm(kaggle)
+
+# Race and team variables
+doping <- read_excel("Doping.xlsx")
+budget <- read_excel("Budget.xlsx")
+# Team budget for 2024 - 2025
+budgets_team <- read_excel("Team_Budgets_2024_2025.xlsx")
+```
+
+# Data cleaning
+
+## Data formating
+
+```{r formating}
+# Split column "Winner.of.Stage" in "name of rider" and "team name"
+tf1 <- tf %>%
+  separate(Winner.of.stage, into = c("name", "team"), sep = " \\(", remove = FALSE) %>%
+  mutate(team = sub("\\)$", "", team))
+
+# One line included the also maiden name of the cyclist (TdF1908) so it thought the program was the cyclist
+tf1[tf1$Winner.of.stage == "Henri Cornet (Geboren Jardy)  (Tdf 1908 ***)", "team"] <- "Tdf 1908 ***"
+```
+
+## Missing values
+
+Missing values because the rider's name is missing. But the team name actually exists. And when the column "Winner.of.Stage" was split. The team name accidentally ended up in there.
+
+```{r missing1}
+# 84 out of 465 stages are 'NA'. Often the name of the rider was missing 
+# so when R split the data it puts the name of the team as name of the rider
+rows_na <- tf1[is.na(tf1$team), ] # Manually checked the 84 samples: If "name" column was filled then it was in all cases a team name. And actually the winner rider name was missing (which I don't need for the analysis)
+rows_team <- rows_na[!rows_na$Winner.of.stage == "",] # The 50 samples where only the team rider name is missing.
+# Make the "name" column the "team column"
+rows_team$team <- rows_team$name
+# Make the "name" column NA
+rows_team$name <- NA
+
+# Rename missing team names that accidentally ended up in the name column because the rider'S name was missing
+tf1[rownames(rows_team), "team"] <- tf1[rownames(rows_team), "Winner.of.stage"]
+tf1[rownames(rows_team), "name"] <- NA
+```
+
+Missing rider's and team name. Use data set from kaggle to fill missing values
+
+```{r missing2}
+# Step 1: Convert kaggle data into a format similar to tf1
+kaggle_clean <- separate(kaggle_clean, stage_results_id, 
+                         into = c("StageText", "Stages"),
+                         sep = "-", convert = TRUE)
+kaggle_clean <- kaggle_clean[ ,c("year", "Stages", "rider", "team")]
+colnames(kaggle_clean) <- c("Year", "Stages", "rider", "team")
+
+# Step 2: Merge tf1 and kaggle_clean data to fill in missing data in tf1
+merged <- merge(tf1, kaggle_clean, 
+                by = c("Year", "Stages"), 
+                all.x = TRUE, 
+                suffixes = c("", "_ans"))
+
+# Fill missing values from _ans and rider columns
+merged$team[is.na(tf1$team)] <- merged$team_ans[is.na(tf1$team)]
+merged$name[is.na(merged$name)] <- merged$rider[is.na(merged$name)]
+
+# Drop the helper columns
+merged <- merged[c("Year", "Stages", "TotalTDFDistance", "Start", "End", 
+                   "Winner.of.stage", "name", "team", "Yellow.Jersey", 
+                   "Green.jersey", "Polka.dot.jersey", "White.jersey", 
+                   "Leader")]
+
+# Rename merged to tf1
+rm(tf1)
+tf1 <- merged
+```
+
+## Duplicates
+
+Remove actual duplicates. Some duplicates were actually because there was a reason (i.e. tie). Therefore, they were not removed.
+
+```{r duplicates}
+# Check for duplicates
+tapply(tf1$Stages, tf1$Year, anyDuplicated) #1924 (tie), 1934 (two half stages), 1937 and 1938 (both ties)
+# Remove duplicates (for one stage, multiple rows)
+tf1 <- tf1[-c(65,66,67),] #2022
+```

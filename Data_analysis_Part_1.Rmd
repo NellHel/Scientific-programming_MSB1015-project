@@ -1,0 +1,177 @@
+---
+title: "Data analysis Part 1"
+output: html_document
+date: "2025-10-19"
+---
+
+```{r setup}
+if(!"Hmisc" %in% installed.packages()){
+  install.packages("Hmisc")}
+
+library(Hmisc)
+```
+
+Run script Data_collection_and_cleaning.Rmd before in the same R workspace.
+
+In this Data Analysis Part 1, a hybrid strength index is defined for each team per year and the Herfindahl-Hirschman Index (HHI) per year is calculated. Different team and race variables are used to correlated with the HHI and strongest team's strength indices.
+
+Most importantly, all visualizations are only found in the last script called "Data_visualization.Rmd".
+
+# Strength index
+
+The team strength index is defining the strength of each Tour de France team per year. It is based on the proportion of stages a team won per year (win share) and the proportion of General classification (GC) Top 10 places (gc share).
+
+## Preparation Win share
+
+The win share is the number of won stages a team won per year divided by the total amount of stages per year.
+
+```{r win}
+# Count stage wins per year per team
+counts_years <- tf1 %>%
+  group_by(Year, team) %>%
+  summarise(wins = n(), .groups = "drop") %>%
+  arrange(Year, wins)
+
+# How many stages per year
+stages_no <- freq(tf1$Year)
+stages_no$Year <- rownames(stages_no)
+stages_no <- stages_no[,c("Year", "n")]
+```
+
+## Preparation GC share
+
+The general classification share will be calculated based on the proportion of "gc points" a team won each year divided by the total amount of "gc points" per year.
+
+```{r gc}
+# GC wins top 10
+gc_top10 <- gc[gc$Rank >=1 & gc$Rank <=10, ]
+gc_top10 <- gc_top10[, c("Year", "Team", "Rank")]
+```
+
+## Calculation of GC share and win share
+
+```{r calculation}
+# Merge gc_top10 and counts_years
+counts_years$Team <- toupper(counts_years$team)
+gc_stage_wins <- merge(gc_top10, counts_years, by = c("Year", "Team") , all = TRUE)
+colnames(gc_stage_wins) <- c("Year", "Team", "Rank_GC", "team", "wins_stages")
+
+# Merge total number of stages
+gc_stage_wins <- merge(gc_stage_wins, stages_no, by = "Year", all = TRUE)
+
+# Build data frame with gc points
+gc_points <- data.frame(
+  Rank_GC = c(1,2,3,4,5,6,7,8,9,10),
+  Points_GC = c(25,18,15,12,10,8,6,4,2,1))
+# Merge points to gc_stage_wins data frame
+gc_stage_wins <- merge(gc_stage_wins, gc_points, by = "Rank_GC", all = TRUE)
+
+# Stage_win share + GC share
+gc_stage_wins$Win_Share <- gc_stage_wins$wins_stages / gc_stage_wins$n # Normalize by the total amount of possible stage wins for the respective year
+gc_stage_wins$GC_Share <- gc_stage_wins$Points_GC / 101 # Normalize by the total amount of points
+
+# Adding for each team each year the points together
+# GC_Share can be added for every rider. Win_Share is only once the points for the team, so it's double in the table -> don't add
+gc_shares <- aggregate(gc_stage_wins["GC_Share"], gc_stage_wins[c("Year", "Team")], sum, na.rm = TRUE)
+gc_shares <- gc_shares[!duplicated(gc_shares[c("Year", "Team")]), ]
+
+# Win_Share should not be added
+win_shares <- gc_stage_wins[,c("Year","Team","Win_Share")]
+win_shares <- unique(win_shares)
+
+# Merge
+tf_shares <- merge(win_shares, gc_shares, by = c("Year", "Team"), all = TRUE)
+tf_shares[is.na(tf_shares$GC_Share), "GC_Share"] <- 0
+tf_shares[is.na(tf_shares$Win_Share), "Win_Share"] <- 0
+```
+
+## Hybrid strength index
+
+```{r Strength}
+# Calculate hybrid strength
+tf_shares$Strength <- 0.5 * tf_shares$Win_Share + 0.5 * tf_shares$GC_Share
+# Select strongest team each year
+tf_shares_max <- tf_shares %>%
+  group_by(Year) %>%
+  slice_max(Strength)
+
+# Change TDF19xxx in "no teams"
+tf_shares_max[grepl("TDF", tf_shares_max$Team), "Team"] <- "No Teams"
+tf_shares_max$Color <- match(tf_shares_max$Team, unique(tf_shares_max$Team))
+```
+
+# Herfindahl-Hirschman Index (HHI)
+
+```{r HHI}
+# Calculate Dominance Index (HHI)
+tf_shares$strength_square <- tf_shares$Strength * tf_shares$Strength
+HHI <- rowsum(tf_shares$strength_square, group = tf_shares$Year, na.rm = TRUE)
+colnames(HHI) <- "HHI"
+```
+
+# Race and team variables
+
+## Average kilometer per year
+
+```{r km}
+# Average kilometer per year
+km_avg <- tf1[ ,c("Year", "TotalTDFDistance")]
+km_avg <- km_avg %>%
+  group_by(Year) %>%
+  slice_head(n = 1)
+km_avg <- merge(km_avg, stages_no, by = "Year")
+km_avg$KM_average <- km_avg$TotalTDFDistance / km_avg$n
+```
+
+## Number of teams per year
+
+```{r team_no}
+# Number of teams per year
+teams_no <- tf1[!duplicated(tf1[c("Year", "team")]), c("Year", "team")]
+teams_number <- teams_no %>%
+  group_by(Year) %>%
+  summarise(teamnumber = n())
+```
+
+## Doping cases per year
+
+```{r doping}
+# Doping cases per year
+doping <- doping[, c("Rider", "Year")]
+doping_no <- doping %>%
+  group_by(Year) %>%
+  summarise(Doping_Cases = n())
+```
+
+## Average budget from 2002 - 2024 adjusted for inflation
+
+```{r budget}
+# Budget from 2002 - 2024 adjusted for inflation
+budget$`WorldTour average budget per team` <- as.numeric(budget$`WorldTour average budget per team`)
+```
+
+# Correlation
+
+Correlation between strength index of the strongest team per year, HHI, race and team variables.
+
+```{r correlation}
+# Correlation between HHI index and average kilometer per year, amount of teams, doping per year, budget
+# Prepare dataframe 
+Corr_HHI <- data.frame(
+  Year = rownames(HHI),
+  HHI = HHI,
+  Strength = tf_shares_max$Strength,
+  KM_average = km_avg$KM_average,
+  Stage_number = km_avg$n,
+  Teams_number = teams_number$teamnumber
+)
+Corr_HHI <- merge(Corr_HHI, doping_no, by = "Year", all = TRUE)
+Corr_HHI[is.na(Corr_HHI$Doping_Cases), "Doping_Cases"] <- 0
+Corr_HHI <- merge(Corr_HHI, budget, by = "Year", all = TRUE)
+Corr_HHI <- Corr_HHI[ ,c("HHI", "Strength", 
+                         "KM_average" , "Stage_number", "Teams_number",
+                         "Doping_Cases", "WorldTour average budget per team")]
+
+# Spearman correlation r and p values
+res <- rcorr(as.matrix(Corr_HHI), type = "spearman")
+```

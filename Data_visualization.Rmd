@@ -1,0 +1,202 @@
+---
+title: "Data_visualization"
+output: html_document
+date: "2025-10-19"
+---
+
+```{r setup}
+if(!"ggplot2" %in% installed.packages()){
+  install.packages("ggPlot2")}
+
+if(!"reshape2" %in% installed.packages()){
+  install.packages("reshape2")}
+
+if(!"vegan" %in% installed.packages()){
+  install.packages("vegan")}
+
+library(ggplot2)
+library(reshape2)
+library(vegan)
+```
+
+# Visualization of Part 1
+
+## Strength index
+
+```{r Strength}
+# Plot
+# Assign unique colors for each team
+team_colors <- setNames(hcl.colors(57, "Dark 3"), unique(tf_shares_max$Team))
+tf_shares_max$Color <- team_colors[tf_shares_max$Team]
+
+# ggplot2
+pal <- setNames(hcl.colors(length(tf_shares_max$Team), "Dark 3"), length(tf_shares_max$Team))
+
+ggplot(tf_shares_max, aes(x = Year, y = Strength, color = Team)) +
+  geom_segment(aes(xend = Year, y = 0, yend = Strength), linewidth = 1.2) +
+  scale_color_manual(values = hcl.colors(length(unique(tf_shares_max$Team)), "Dark 3"),
+                     name = "Dominant Team") +
+  labs(title = "Most dominant team by year",
+       x = "Year",
+       y = "Strength score") +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.major.x = element_blank(),
+        legend.position = "right")
+```
+
+## HH index
+
+```{r HHI}
+plot(rownames(HHI), HHI, type = "h", xlab = "Year", ylab = "HHI index", main = "HHI index over the years")
+```
+
+## Race and team variables
+
+Average kilometer per year
+
+```{r km}
+plot(km_avg$Year, km_avg$KM_average, type = "h", xlab = "Year", ylab = "Kilometer", main = "Average length of stage over the years")
+plot(km_avg$Year, km_avg$n, type = "h",  xlab = "Year", ylab= "Number of stages", main = "Average number of stages over the years")
+```
+
+Number of teams per year
+
+```{r teams_no}
+plot(teams_number$Year, teams_number$teamnumber, type = "h", xlab = "Year", ylab = "Number of teams", main = "Number of teams over the years")
+```
+
+Doping cases per year
+
+```{r doping}
+plot(doping_no$Year, doping_no$Doping_Cases, type = "h", xlab = "Year", ylab = "Number of doping cases", main = "Doping cases over the years")
+
+```
+
+Average budget from 2002 - 2024 adjusted per inflation
+
+```{r budget}
+plot(budget$Year, budget$`WorldTour average budget per team`, type = "l", xlab = "Year", ylab = "Inflation adjusted team budget (Euro)", main = "Average team budgets")
+```
+
+## Correlation
+
+```{r Correlation}
+# Melt for ggplot2
+r_melted <- melt(res$r, varnames = c("Var1","Var2"), value.name = "r")
+p_melted <- melt(res$P, varnames = c("Var1","Var2"), value.name = "p")
+# Join r_melted and p_melted and assign p value scores 
+plot_df <- left_join(r_melted, p_melted, by = c("Var1","Var2")) %>%
+  mutate(stars = case_when(
+    p < .001 ~ "***",
+    p < .01  ~ "**",
+    p < .05  ~ "*",
+    TRUE     ~ ""
+  ),
+  label = ifelse(is.na(r), "", sprintf("%.2f%s", r, stars)))
+
+# Plot
+ggplot(plot_df, aes(Var1, Var2, fill = r)) +
+  geom_tile() +
+  geom_text(aes(label = label), color = "black", size = 3) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, name = "Correlation") +
+  labs(
+    title = "Correlation Matrix with Significance",
+    subtitle = "Spearman correlations between team variables",
+    caption = "Stars indicate significance levels (* p < 0.05, ** p < 0.01, *** p < 0.001)",
+    x = NULL,   # or use "Variable 1"
+    y = NULL    # or use "Variable 2"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Visualization Part 2
+
+## Plot GC against win share
+
+```{r plot}
+plot(data$Win_Share, data$GC_Share)
+```
+
+## PCoA of uRF
+
+Plot PCoA1 against PCoA2
+
+```{r plot_vector}
+# To interpret the importance of each variable in the orthogonal space
+envfit_res <- envfit(pcoa_res$vectors ~ ., data = data[, c("Win_Share", "GC_Share")])
+
+# Plot the first two axes
+plot(pcoa_res$vectors[,1], pcoa_res$vectors[,2],
+     xlab = paste0("PCoA1 (", round(pcoa_res$values$Relative_eig[1]*100, 1), "%)"),
+     ylab = paste0("PCoA2 (", round(pcoa_res$values$Relative_eig[2]*100, 1), "%)"),
+     main = "PCoA based on Random Forest dissimilarities",
+     pch = 19)
+plot(envfit_res, p.max = 0.05) # arrows show variables significantly aligned with axes
+```
+
+Plot PCoA3 against PCoA4
+
+```{r plot_pcoa_more}
+# Plot the first two axes
+plot(pcoa_res$vectors[,3], pcoa_res$vectors[,4],
+     xlab = paste0("PCoA3 (", round(pcoa_res$values$Relative_eig[3]*100, 1), "%)"),
+     ylab = paste0("PCoA4 (", round(pcoa_res$values$Relative_eig[4]*100, 1), "%)"),
+     main = "PCoA based on Random Forest dissimilarities",
+     pch = 19)
+```
+
+Prepare for ggplots
+
+```{r prepare}
+PCoA1_2 <- data.frame(PCoA1 = pcoa_res$vectors[,1],
+                 PCoA2 = pcoa_res$vectors[,2],
+                 Year = years,
+                 GC_Share = data$GC_Share,
+                 Win_Share = data$Win_Share,
+                 Budget = merged_data$`Budget (Millionen in Euro)`
+                 )
+```
+
+ggPlot colored by year
+
+```{r plot_year}
+ggplot(PCoA1_2, aes(PCoA1, PCoA2, color = Year, size = Win_Share)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "PCoA colored by Year",
+       x = paste0("PCoA1 (", round(pcoa_res$values$Relative_eig[1]*100, 1), "%)"),
+       y = paste0("PCoA2 (", round(pcoa_res$values$Relative_eig[2]*100, 1), "%)"),
+       color = "Year",
+       size = "Win Share"
+       ) #+
+  #scale_color_gradient(low = "green", high = "blue")
+```
+
+ggPlot colored by win share and gc share
+
+```{r plot_win_gc_share}
+ggplot(PCoA1_2, aes(PCoA1, PCoA2, color = Win_Share, size = GC_Share)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "PCoA colored by its features (win and gc share)",
+       x = paste0("PCoA1 (", round(pcoa_res$values$Relative_eig[1]*100, 1), "%)"),
+       y = paste0("PCoA2 (", round(pcoa_res$values$Relative_eig[2]*100, 1), "%)"),
+       color = "Win Share",
+       size = "GC Share"
+       ) +
+  scale_color_gradient(low = "green", high = "blue")
+```
+
+ggPlot colored by budget
+
+```{r plot_budget}
+ggplot(PCoA1_2, aes(PCoA1, PCoA2, color = Budget)) +
+  geom_point() +
+  theme_minimal() +
+  labs(title = "PCoA colored by team budget 24-25",
+       x = paste0("PCoA1 (", round(pcoa_res$values$Relative_eig[1]*100, 1), "%)"),
+       y = paste0("PCoA2 (", round(pcoa_res$values$Relative_eig[2]*100, 1), "%)"),
+       color = "Budget (Mill. EURO)"
+       ) 
+```

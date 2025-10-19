@@ -1,0 +1,76 @@
+---
+title: "Data analysis_Part_2"
+output: html_document
+date: "2025-10-19"
+---
+
+```{r setup}
+if(!"randomForest" %in% installed.packages()){
+  install.packages("randomForest")}
+  
+if(!"ape" %in% installed.packages()){
+  install.packages("ape")}
+
+library(randomForest)
+library(ape)
+```
+
+## Data analysis Part 2
+
+Run script after "Data_analysis_Part_1.Rmd". In this part, an unsupervised random forest analysis followed up by a principal coordinate analysis are performed.
+
+# Unsupervised Random Forest
+
+## Prepare data
+
+```{r Prepare}
+# Select data
+data <- tf_shares[ , c("Year", "Team", "Win_Share", "GC_Share")]
+data$Team_Year <- paste(data$Team, data$Year, sep = "_")
+rownames(data) <- data$Team_Year
+# Remove the year where there were no teams
+data <- data[!data$Year %in%  c(1903:1908, 1919:1923), ]
+# Create colors for each unique year (needed later for visualization)
+years <- factor(data$Year) 
+# Select only features 
+data <- data[ , c("Win_Share", "GC_Share")]
+```
+
+## URF
+
+```{r uRF}
+# Step 1: Create synthetic data by permuting each column
+synthetic <- apply(data, 2, sample)
+
+# Step 2: Combine real + synthetic
+combined <- rbind(data, synthetic)
+labels <- factor(c(rep(1, nrow(data)), rep(0, nrow(synthetic))))
+
+# Step 3: Fit Random Forest
+rf_unsup <- randomForest(x = combined, y = labels, proximity = TRUE)
+
+# Step 4: Extract proximity matrix (for the real data only)
+prox <- rf_unsup$proximity[1:nrow(data), 1:nrow(data)]
+
+# Step 5: Convert proximity in distance matrix
+diss <- 1 - prox
+```
+
+# Principal Coordinate Analysis
+
+```{r PCoA}
+pcoa_res <- pcoa(as.dist(diss))
+```
+
+To color the samples (Team_Year) by budget, at least for teams between 2024-2025, prepare the team budgets.
+
+```{r budget_team}
+budgets_team$Team_Year <- paste(budgets_team$Team, budgets_team$Year, sep = "_")
+budgets_team <- budgets_team[ , c("Team_Year", "Budget (Millionen in Euro)")]
+
+# Merge samples with its budgets
+data$Team_Year <- rownames(data)
+merged_data <- merge(data, budgets_team, by = "Team_Year", all.x = TRUE)
+merged_data <- separate(merged_data, Team_Year, into = c("Team_1", "Year"), sep = "_", convert = TRUE)
+merged_data <- merged_data[order(merged_data$Year), ]
+```
